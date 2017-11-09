@@ -14,8 +14,10 @@ class ViewController: UIViewController {
     var manager:CBCentralManager!
     var peripherals = Array<CBPeripheral>()
     var peri: CBPeripheral!
+    var bytes: NSData!
+    var characteristic: CBCharacteristic!
     fileprivate let data = NSMutableData()
-    
+
     @IBOutlet weak var tableView: UITableView!
     @IBOutlet weak var textView: UITextView!
     
@@ -52,9 +54,10 @@ extension ViewController: CBCentralManagerDelegate{
         if peripheral.name != nil {
             peripherals.append(peripheral)
         }
-      //  print(peripheral)
-        tableView.reloadData()
-        
+        DispatchQueue.main.async() {
+            
+            self.tableView.reloadData()
+        }
     }
     
     /** If the connection fails for whatever reason, we need to deal with it.
@@ -84,6 +87,8 @@ extension ViewController: CBCentralManagerDelegate{
         // Search only for services that match our UUID
         peri.discoverServices(nil)
     }
+   
+    
 }
 
 extension ViewController: CBPeripheralDelegate{
@@ -106,6 +111,7 @@ extension ViewController: CBPeripheralDelegate{
                 if (service.uuid == CBUUID(string: Device.NOVUS_SERVICE_UUID)) {
                     // 2
                     peripheral.discoverCharacteristics(nil, for: service)
+                    print("SERIVCE UUID   \(service.uuid)")
                 }
             }
         }
@@ -123,29 +129,96 @@ extension ViewController: CBPeripheralDelegate{
             return
         }
         
+       // SERVICE ID     0783B03E-8535-B5A0-7140-A304D2495CB7
+       // CHARACTERISTIC UID    0783B03E-8535-B5A0-7140-A304D2495CBA
+        
+        
         if let characteristics = service.characteristics {
             // 1
             //var enableValue:UInt8 = 1
            // let enableBytes = NSData(bytes: &enableValue, length: MemoryLayout<UInt8>.size)
             
             //array bytes ns data
-            let bytes = NSData(bytes: [0x5A, 0xB1, 0xFA, 0xBB, 0xC0, 0x3D, 0xFE, 0x34,0x45,0xCD,0x00,0x54,0x25,0x62,0x36,0x22] as [UInt8], length: 16)
-            print(bytes)
+           self.bytes = NSData(bytes: [0x5A, 0xB1, 0xFA, 0xBB, 0xC0, 0x3D, 0xFE, 0x34,0x45,0xCD,0x00,0x54,0x25,0x62,0x36,0x22] as [UInt8], length: 16)
+           print("BYTES \(bytes)")
+            let base64String = bytes.base64EncodedString(options: [])
+            print("SENHA BASE 64 \(base64String)")
+           // let newData = base64String.data(using: String.Encoding.utf8)
+            //print(newData)
             
-        
+            let bytes2:[UInt8] = [0x5A, 0xB1, 0xFA, 0xBB, 0xC0, 0x3D, 0xFE, 0x34,0x45,0xCD,0x00,0x54,0x25,0x62,0x36,0x22]
+            let data = Data(fromArray: bytes2)
+            print("DATA \(data.hex())")
+            
+            
+            let bytes3 = data.toArray(type: UInt8.self)
+            print(bytes3)
+            print("SENHA BYTE 3  \(bytes3)")
+            
+//            let bytes: [UInt8] = [107, 200, 119, 211, 247, 171, 132, 179, 181, 133, 54, 146, 206, 234, 69, 197]
+//            let base64String = bytes.withUnsafeBufferPointer { buffer -> String in
+//                let data = NSData(bytes: buffer.baseAddress, length: buffer.count)
+//                return data.base64EncodedStringWithOptions([])
+//            }
+//            print(base64String)
+//
+            
             // 2
             for characteristic in characteristics {
-             
+                
+                
+                if characteristic.uuid == CBUUID(string: "0783B03E-8535-B5A0-7140-A304D2495CB8"){
+                    self.peri.setNotifyValue(true, for: characteristic)
+                    
+                
+                }
+                    
+                
+                if characteristic.uuid == CBUUID(string: "0783B03E-8535-B5A0-7140-A304D2495CBA"){
+                   // print("PRINT PASSWORD \(data.hex())")
+                    
+                    self.characteristic = characteristic
+                  
+                   // self.peri.writeValue(data, for: "")
+                    self.peri.writeValue(bytes as Data, for: characteristic, type: CBCharacteristicWriteType.withResponse)
+                    
+                }
+                
+                if characteristic.uuid == CBUUID(string: Device.NOVUS_CHARACTERISTIC_UUID1) {
+                    //peri.readValue(for: characteristic)
+                    //peri.
+                    
+                //    peri?.setNotifyValue(true, for: characteristic)
+                    
+                }
+                if characteristic.uuid == CBUUID(string: Device.NOVUS_CHARACTERISTIC_UUID2) {
+                    //peri.readValue(for: characteristic)
+                    //peri.
+                    
+                    //peri?.setNotifyValue(true, for: characteristic)
+                    
+                }
+                
                 if characteristic.uuid == CBUUID(string: Device.NOVUS_CHARACTERISTIC_UUID3) {
                     // 3a
                     // novus characteristic 1
                    // peri?.writeValue((bytes as NSData) as Data, for: characteristic, type: .withResponse)
-                    peri?.writeValue(bytes as Data, for: characteristic, type: .withResponse)
-                    
+             //      peri?.writeValue(newData!, for: characteristic, type: .withResponse)
+                    if let newData = base64String.data(using: String.Encoding.utf8){
+                        print(newData.hex())
+                     //   peri?.writeValue(data, for: characteristic, type: CBCharacteristicWriteType.withResponse)
+                      //  peri.readValue(for: characteristic)
+                    }
                 }
             }
         }
         
+    }
+    func peripheralDidUpdateName(_ peripheral: CBPeripheral) {
+        print(peripheral)
+    }
+    func peripheral(_ peripheral: CBPeripheral, didWriteValueFor descriptor: CBDescriptor, error: Error?) {
+        print("entrei")
     }
     
     
@@ -202,6 +275,8 @@ extension ViewController: CBPeripheralDelegate{
         // Notification has started
         if (characteristic.isNotifying) {
             print("Notification began on \(characteristic)")
+            self.peri.writeValue(self.bytes as! Data, for: self.characteristic, type: CBCharacteristicWriteType.withResponse)
+            
         } else { // Notification has stopped
             print("Notification stopped on (\(characteristic))  Disconnecting")
             manager?.cancelPeripheralConnection(peripheral)
@@ -246,17 +321,6 @@ struct Device {
     static let NOVUS_CHARACTERISTIC_UUID3 = "0783B03E-8535-B5A0-7140-A304D2495CBA"//WriteData
     
     
-    // Temperature UUIDs
-    static let TemperatureServiceUUID = "F000AA00-0451-4000-B000-000000000000"
-    static let TemperatureDataUUID = "F000AA01-0451-4000-B000-000000000000"
-    static let TemperatureConfig = "F000AA02-0451-4000-B000-000000000000"
-    
-    // Humidity UUIDs
-    static let HumidityServiceUUID = "F000AA20-0451-4000-B000-000000000000"
-    static let HumitidyDataUUID = "F000AA21-0451-4000-B000-000000000000"
-    static let HumidityConfig = "F000AA22-0451-4000-B000-000000000000"
-    
-    //...
 }
 
 extension Data {
@@ -272,5 +336,10 @@ extension Data {
         }
     }
     
+}
+extension Data {
+    func hex(separator:String = "") -> String {
+        return (self.map { String(format: "%02X", $0) }).joined(separator: separator)
+    }
 }
 
