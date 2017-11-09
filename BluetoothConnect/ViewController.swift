@@ -52,7 +52,7 @@ extension ViewController: CBCentralManagerDelegate{
         if peripheral.name != nil {
             peripherals.append(peripheral)
         }
-        print(peripheral)
+      //  print(peripheral)
         tableView.reloadData()
         
     }
@@ -76,11 +76,13 @@ extension ViewController: CBCentralManagerDelegate{
         // Clear the data that we may already have
         data.length = 0
         
+        peri = peripheral
+        
         // Make sure we get the discovery callbacks
-        peripheral.delegate = self
+        peri.delegate = self
         
         // Search only for services that match our UUID
-        peripheral.discoverServices(nil)
+        peri.discoverServices(nil)
     }
 }
 
@@ -123,32 +125,23 @@ extension ViewController: CBPeripheralDelegate{
         
         if let characteristics = service.characteristics {
             // 1
-            var enableValue:UInt8 = 1
-            let enableBytes = NSData(bytes: &enableValue, length: MemoryLayout<UInt8>.size)
+            //var enableValue:UInt8 = 1
+           // let enableBytes = NSData(bytes: &enableValue, length: MemoryLayout<UInt8>.size)
             
+            //array bytes ns data
+            let bytes = NSData(bytes: [0x5A, 0xB1, 0xFA, 0xBB, 0xC0, 0x3D, 0xFE, 0x34,0x45,0xCD,0x00,0x54,0x25,0x62,0x36,0x22] as [UInt8], length: 16)
+            print(bytes)
             
+        
             // 2
             for characteristic in characteristics {
-                // Temperature Data Characteristic
-                if characteristic.uuid == CBUUID(string: Device.NOVUS_CHARACTERISTIC_UUID1) {
-                    // 3a
-                    // novus characteristic 1
-                    let charac = characteristic
-                    peri?.setNotifyValue(true, for: charac)
-                }
-                
-                if characteristic.uuid == CBUUID(string: Device.NOVUS_CHARACTERISTIC_UUID2) {
-                    // 3a
-                    // novus characteristic 2 FLOW CONTROL???
-                   // let charac = characteristic
-                   // peri?.setNotifyValue(true, for: charac)
-                }
-                
+             
                 if characteristic.uuid == CBUUID(string: Device.NOVUS_CHARACTERISTIC_UUID3) {
                     // 3a
                     // novus characteristic 1
-                    let charac = characteristic
-                    peri?.writeValue(enableBytes as Data, for: charac, type: .withResponse)
+                   // peri?.writeValue((bytes as NSData) as Data, for: characteristic, type: .withResponse)
+                    peri?.writeValue(bytes as Data, for: characteristic, type: .withResponse)
+                    
                 }
             }
         }
@@ -197,24 +190,7 @@ extension ViewController: CBPeripheralDelegate{
         // extract the data from the dataBytes object
         data.getBytes(&dataArray, length: dataLength * MemoryLayout<UInt16>.size)
         
-        // 3
-        // get the value of the of the ambient temperature element
-    //    let rawAmbientTemp:UInt16 = dataArray[Device.SensorDataIndexTempAmbient]
-        
-        // 4
-        // convert the ambient temperature
-     //   let ambientTempC = Double(rawAmbientTemp) / 128.0
-       // let ambientTempF = convertCelciusToFahrenheit(ambientTempC)
-        
-        // 5
-        // Use the Ambient Temperature reading for our label
-        //let temp = Int(ambientTempF)
-        //lastTemperature = temp
-        
-        // If the application is active and in the foreground, update the UI
-       // if UIApplication.sharedApplication().applicationState == .Active {
-        //    updateTemperatureDisplay()
-       // }
+     
     }
     
     /** The peripheral letting us know whether our subscribe/unsubscribe happened or not
@@ -222,10 +198,6 @@ extension ViewController: CBPeripheralDelegate{
     func peripheral(_ peripheral: CBPeripheral, didUpdateNotificationStateFor characteristic: CBCharacteristic, error: Error?) {
         print("Error changing notification state: \(String(describing: error?.localizedDescription))")
         
-        // Exit if it's not the transfer characteristic
-        guard characteristic.uuid.isEqual(transferCharacteristicUUID) else {
-            return
-        }
         
         // Notification has started
         if (characteristic.isNotifying) {
@@ -269,9 +241,9 @@ struct Device {
     //...
     
     static let NOVUS_SERVICE_UUID = "0783B03E-8535-B5A0-7140-A304D2495CB7"//service
-    static let NOVUS_CHARACTERISTIC_UUID1 = "0783B03E-8535-B5A0-7140-A304D2495CB7"//ReadData, Notify
-    static let NOVUS_CHARACTERISTIC_UUID2 = "0783B03E-8535-B5A0-7140-A304D2495CB7"//FlowControl
-    static let NOVUS_CHARACTERISTIC_UUID3 = "0783B03E-8535-B5A0-7140-A304D2495CB7"//WriteData
+    static let NOVUS_CHARACTERISTIC_UUID1 = "0783B03E-8535-B5A0-7140-A304D2495CB8"//ReadData, Notify
+    static let NOVUS_CHARACTERISTIC_UUID2 = "0783B03E-8535-B5A0-7140-A304D2495CB9"//FlowControl
+    static let NOVUS_CHARACTERISTIC_UUID3 = "0783B03E-8535-B5A0-7140-A304D2495CBA"//WriteData
     
     
     // Temperature UUIDs
@@ -285,5 +257,20 @@ struct Device {
     static let HumidityConfig = "F000AA22-0451-4000-B000-000000000000"
     
     //...
+}
+
+extension Data {
+    
+    init<T>(fromArray values: [T]) {
+        var values = values
+        self.init(buffer: UnsafeBufferPointer(start: &values, count: values.count))
+    }
+    
+    func toArray<T>(type: T.Type) -> [T] {
+        return self.withUnsafeBytes {
+            [T](UnsafeBufferPointer(start: $0, count: self.count/MemoryLayout<T>.stride))
+        }
+    }
+    
 }
 
