@@ -35,11 +35,39 @@ class ViewController: UIViewController {
     func connectBluetooth(peripheral: CBPeripheral){
         manager?.connect(peripheral, options: nil)
     }
-    
-    
-    
-
 }
+
+extension ViewController: UITableViewDelegate{
+    func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
+        let selectPeripheral = self.peripherals[indexPath.row]
+        //    self.peri = selectPeripheral
+        connectBluetooth(peripheral: selectPeripheral)
+        
+        self.performSegue(withIdentifier: "goConnect", sender: selectPeripheral)
+    }
+}
+
+extension ViewController: UITableViewDataSource{
+    
+    func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
+        
+        let cell: UITableViewCell = self.tableView.dequeueReusableCell(withIdentifier: "cell")! as UITableViewCell
+        let peripheral = peripherals[indexPath.row]
+        cell.textLabel?.text = peripheral.name
+        
+        return cell
+    }
+    
+    func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
+        return peripherals.count
+    }
+}
+
+
+
+
+
+
 
 extension ViewController: CBCentralManagerDelegate{
     func centralManagerDidUpdateState(_ central: CBCentralManager) {
@@ -82,13 +110,16 @@ extension ViewController: CBCentralManagerDelegate{
         peri = peripheral
         
         // Make sure we get the discovery callbacks
-        peri.delegate = self
+        peripheral.delegate = self
         
         // Search only for services that match our UUID
-        peri.discoverServices(nil)
+        peripheral.discoverServices(nil)
     }
    
-    
+    func peripheralManagerDidUpdateState(peripheral: CBPeripheralManager)
+    {
+        print("state: \(peripheral.state)")
+    }
 }
 
 extension ViewController: CBPeripheralDelegate{
@@ -108,15 +139,46 @@ extension ViewController: CBPeripheralDelegate{
         if let services = peripheral.services {
             for service in services {
                 // 1
-                if (service.uuid == CBUUID(string: Device.NOVUS_SERVICE_UUID)) {
+               // if (service.uuid == CBUUID(string: Device.NOVUS_SERVICE_UUID)) {
                     // 2
                     peripheral.discoverCharacteristics(nil, for: service)
                     print("SERIVCE UUID   \(service.uuid)")
-                }
+                //}
             }
         }
         
      
+    }
+    
+    func peripheral(_ peripheral: CBPeripheral, didWriteValueFor characteristic: CBCharacteristic, error: Error?) {
+        
+        if error != nil {
+            print("DEU RUIM NO WRITE VALUE FOR CHARACTERISTIC    = \(String(describing: error)) ")
+            return
+        }
+        
+        print("ENVIEI O PASSWORD\(characteristic)")
+        peripheral.setNotifyValue(true, for: characteristic)
+        print("INFORMACOES DO PERIPHERAL \(peripheral)")
+    }
+    
+    func peripheral(_ peripheral: CBPeripheral, didWriteValueFor descriptor: CBDescriptor, error: Error?) {
+        if error != nil {
+            print("DEU RUIM NO WRITE VALUE FOR DESCRIPTOR    = \(String(describing: error)) ")
+            return
+        }
+        
+        print("ENVIEI O PASSWORD E ESSE É O DESCRIPTOR \(descriptor)")
+    }
+    
+    func peripheral(_ peripheral: CBPeripheral, didUpdateValueFor characteristic: CBCharacteristic, error: Error?) {
+        if error != nil {
+            print("ERROR ON UPDATING VALUE FOR CHARACTERISTIC: \(characteristic) - \(String(describing: error?.localizedDescription))")
+            return
+        }
+        
+        print("ENTREI NO DID UPDATE VALUE FOR CHARACTERISTIC = \(String(describing: peripheral)) E NOTIFY = \(String(describing: characteristic.value))")
+        
     }
     
     /** The Transfer characteristic was discovered.
@@ -128,6 +190,7 @@ extension ViewController: CBPeripheralDelegate{
             print("ERROR DISCOVERING CHARACTERISTICS: \(String(describing: error?.localizedDescription))")
             return
         }
+        
         
        // SERVICE ID     0783B03E-8535-B5A0-7140-A304D2495CB7
        // CHARACTERISTIC UID    0783B03E-8535-B5A0-7140-A304D2495CBA
@@ -168,7 +231,7 @@ extension ViewController: CBPeripheralDelegate{
                 
                 
                 if characteristic.uuid == CBUUID(string: "0783B03E-8535-B5A0-7140-A304D2495CB8"){
-                    self.peri.setNotifyValue(true, for: characteristic)
+                    peripheral.setNotifyValue(true, for: characteristic)
                     
                 
                 }
@@ -179,8 +242,9 @@ extension ViewController: CBPeripheralDelegate{
                     
                     self.characteristic = characteristic
                   
-                   // self.peri.writeValue(data, for: "")
-                    self.peri.writeValue(bytes as Data, for: characteristic, type: CBCharacteristicWriteType.withResponse)
+                   // self.peri.writeValue(data, for: "") a
+                 //   peri
+                   peripheral.writeValue(bytes as Data, for: characteristic, type: CBCharacteristicWriteType.withResponse)
                     
                 }
                 
@@ -217,37 +281,8 @@ extension ViewController: CBPeripheralDelegate{
     func peripheralDidUpdateName(_ peripheral: CBPeripheral) {
         print(peripheral)
     }
-    func peripheral(_ peripheral: CBPeripheral, didWriteValueFor descriptor: CBDescriptor, error: Error?) {
-        print("entrei")
-    }
     
-    
-    /** This callback lets us know more data has arrived via notification on the characteristic
-     */
-    func peripheral(_ peripheral: CBPeripheral, didUpdateValueFor characteristic: CBCharacteristic, error: Error?) {
-       
-        if error != nil {
-            print("ERROR ON UPDATING VALUE FOR CHARACTERISTIC: \(characteristic) - \(String(describing: error?.localizedDescription))")
-            return
-        }
         
-        // 1
-        // Extract the data from the Characteristic's value property
-        // and display the value based on the Characteristic type
-        if let dataBytes = characteristic.value {
-            if characteristic.uuid == CBUUID(string: Device.NOVUS_CHARACTERISTIC_UUID1) {
-                // 1
-                displayTemperature(data: dataBytes as NSData)
-            } else if characteristic.uuid == CBUUID(string: Device.NOVUS_CHARACTERISTIC_UUID2) {
-                // 2
-                displayTemperature(data: dataBytes as NSData)
-            }else if characteristic.uuid == CBUUID(string: Device.NOVUS_CHARACTERISTIC_UUID3){
-                // 3
-                displayTemperature(data: dataBytes as NSData)
-            }
-        }
-        
-    }
     
     
     func displayTemperature(data:NSData) {
@@ -275,38 +310,12 @@ extension ViewController: CBPeripheralDelegate{
         // Notification has started
         if (characteristic.isNotifying) {
             print("Notification began on \(characteristic)")
-            self.peri.writeValue(self.bytes as! Data, for: self.characteristic, type: CBCharacteristicWriteType.withResponse)
+            peripheral.writeValue(self.bytes as! Data, for: self.characteristic, type: .withResponse)
             
         } else { // Notification has stopped
             print("Notification stopped on (\(characteristic))  Disconnecting")
             manager?.cancelPeripheralConnection(peripheral)
         }
-    }
-}
-
-extension ViewController: UITableViewDelegate{
-    func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
-        let selectPeripheral = self.peripherals[indexPath.row]
-    //    self.peri = selectPeripheral
-        connectBluetooth(peripheral: selectPeripheral)
-        
-        self.performSegue(withIdentifier: "goConnect", sender: selectPeripheral)
-    }
-}
-
-extension ViewController: UITableViewDataSource{
-   
-    func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
-        
-        let cell: UITableViewCell = self.tableView.dequeueReusableCell(withIdentifier: "cell")! as UITableViewCell
-        let peripheral = peripherals[indexPath.row]
-        cell.textLabel?.text = peripheral.name
-        
-        return cell
-    }
-    
-    func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-        return peripherals.count
     }
 }
 
